@@ -213,6 +213,25 @@ class World(object):
 		self.camera_manager.sensor = None
 		self.camera_manager.index = None
 
+	def get_vehicle_data(self):
+		loc = self.player.get_location()
+		vel = self.player.get_velocity()
+		vel = 3.6 * math.sqrt(vel.x**2 + vel.y**2 + vel.z**2) # converting vector to scalar speed in km/hr
+		wp = self.map.get_waypoint(loc)
+		return loc, vel, wp
+		# return {'waypoint':wp,'id':wp.id,'transform':wp.transform,'is_junction':wp.is_junction,
+		# 		'lane_width':wp.lane_width,'road_id':wp.road_id,
+		# 		'section_id':wp.section_id,'lane_id':wp.lane_id,
+		# 		'opendrive_sVal':wp.s,'lane_change':wp.lane_change,
+		# 		'lane_type':wp.lane_type,'right_lane_marking':wp.right_lane_marking,
+		# 		'left_lane_marking':wp.left_lane_marking}
+
+	def get_image(self):
+		return self.camera_manager.image
+
+	def get_collision_reading(self):
+		return self.collision_sensor.reading
+
 	def destroy(self):
 		actors = [
 			self.camera_manager.sensor,
@@ -231,12 +250,12 @@ class World(object):
 
 
 class KeyboardControl(object):
-	def __init__(self, world, start_in_autopilot):
-		self._autopilot_enabled = start_in_autopilot
+	def __init__(self, world, start_in_autonomous=True):
+		self._autopilot_enabled = False
+		self._autonomous_enabled = start_in_autonomous
 		if isinstance(world.player, carla.Vehicle):
 			self._control = carla.VehicleControl()
 			world.player.set_autopilot(self._autopilot_enabled)
-			self._autonomous_enabled = False
 		elif isinstance(world.player, carla.Walker):
 			self._control = carla.WalkerControl()
 			self._autopilot_enabled = False
@@ -329,6 +348,7 @@ class KeyboardControl(object):
 							world.hud.notification('Autopilot %s' % ('On' if self._autopilot_enabled else 'Off'))
 		# parse keyboard controls - i.e. WASD movement
 		if not self._autopilot_enabled and not self._autonomous_enabled:
+
 			if isinstance(self._control, carla.VehicleControl):
 				self._parse_vehicle_keys(pygame.key.get_pressed(), clock.get_time())
 				self._control.reverse = self._control.gear < 0
@@ -576,6 +596,7 @@ class HelpText(object):
 
 class CollisionSensor(object):
 	def __init__(self, parent_actor, hud):
+		self.reading = (0,0) #tuple: (Collision frame, Collision Intensity)
 		self.sensor = None
 		self.history = []
 		self._parent = parent_actor
@@ -603,7 +624,8 @@ class CollisionSensor(object):
 		self.hud.notification('Collision with %r' % actor_type)
 		impulse = event.normal_impulse
 		intensity = math.sqrt(impulse.x**2 + impulse.y**2 + impulse.z**2)
-		self.history.append((event.frame_number, intensity))
+		self.reading = (event.frame_number,intensity)
+		self.history.append(self.reading)
 		if len(self.history) > 4000:
 			self.history.pop(0)
 
@@ -631,9 +653,12 @@ class LaneInvasionSensor(object):
 		self = weak_self()
 		if not self:
 			return
-		lane_types = set(x.type for x in event.crossed_lane_markings)
-		text = ['%r' % str(x).split()[-1] for x in lane_types]
-		self.hud.notification('Crossed line %s' % ' and '.join(text))
+		try:
+			lane_types = set(x.type for x in event.crossed_lane_markings)
+			text = ['%r' % str(x).split()[-1] for x in lane_types]
+			self.hud.notification('Crossed line %s' % ' and '.join(text))
+		except:
+			return
 
 # ==============================================================================
 # -- GnssSensor --------------------------------------------------------
@@ -670,7 +695,7 @@ class GnssSensor(object):
 
 class CameraManager(object):
 	def __init__(self, parent_actor, hud):
-		self.image = None
+		self.image = None #The current image being snapped by the selected sensor is stored in this variable
 		self.sensor = None
 		self.surface = None
 		self._parent = parent_actor
@@ -736,6 +761,7 @@ class CameraManager(object):
 		if self.surface is not None:
 			display.blit(self.surface, (0, 0))
 
+
 	@staticmethod
 	def _parse_image(weak_self, image):
 		self = weak_self()
@@ -756,7 +782,7 @@ class CameraManager(object):
 			self.surface = pygame.surfarray.make_surface(lidar_img)
 		else:
 			image.convert(self.sensors[self.index][1])
-			array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
+			array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8")) #
 			array = np.reshape(array, (image.height, image.width, 4))
 			array = array[:, :, :3]
 			array = array[:, :, ::-1]

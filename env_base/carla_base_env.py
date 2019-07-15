@@ -1,6 +1,8 @@
 
 """
 OpenAI Gym compatible Driving simulation environment based on Carla 0.9.5.
+
+Codebase by: Osama Yousuf - oy02945@st.habib.edu.pk
 """
 
 '''
@@ -66,33 +68,25 @@ import random
 import client
 from client import *
 import pygame
-from gym.spaces import Box, Discrete, Tuple
+from gym.spaces import Box
 
 # Set this to the path to your Carla binary
-SERVER_BINARY = os.environ.get(
-	"CARLA_SERVER", os.path.expanduser("~/Desktop/Packaged-CARLA-0.9.5/LinuxNoEditor/CarlaUE4.sh"))
+SERVER_BINARY = os.environ.get("CARLA_SERVER", os.path.expanduser("~/Desktop/Packaged-CARLA-0.9.5/LinuxNoEditor/CarlaUE4.sh"))
 assert os.path.exists(SERVER_BINARY), "CARLA_SERVER environment variable is not set properly. Please check and retry"
 
-# Default environment configuration
+# The default environment configuration
 
 ENV_CONFIG = {
 	"discrete_actions": True,
-	"use_image_only_observations": True,
-	#"scenarios": [scenario_config["Lane_Keep_Town2"]],
-	"framestack": 2,  # note: only [1, 2] currently supported
-	"use_depth_camera": False,
 	"early_terminate_on_collision": True,
 	"verbose": False,
-	"render" : True,  # Render to display if true
-	"render_x_res": 800,
-	"render_y_res": 600,
-	"x_res": 80,
-	"y_res": 80,
-	"seed": 1,
-	"wait_time": 5
+	"wait_time": 5,
+	"max_steps": 5000,
+	"early_terminate_on_collision":False
 }
 
-# Define the discrete action space
+# The discrete action space
+
 DISCRETE_ACTIONS = {
 	0: [0.0, 0.0],    # Coast
 	1: [0.0, -0.5],   # Turn Left
@@ -105,16 +99,12 @@ DISCRETE_ACTIONS = {
 	8: [-0.5, 0.5],   # Bear Right & decelerate
 }
 
-live_carla_processes = set()  # To keep track of all the Carla processes we launch to make the cleanup easier
-
-def cleanup():
-	print("Killing live carla processes", live_carla_processes)
-	for pgid in live_carla_processes:
-		os.killpg(pgid, signal.SIGKILL)
-atexit.register(cleanup)
-
 class CarlaEnv(gym.Env):
 	def __init__(self,args,config=ENV_CONFIG):
+		'''
+		Initiate the Carla Environment.
+		'''
+		# Environment variables
 		self.args = args
 		self.server = None
 		self.client = None
@@ -125,57 +115,38 @@ class CarlaEnv(gym.Env):
 		self.controller = None
 		self.config = config
 
-		if config["discrete_actions"]:
-			self.action_space = Discrete(len(DISCRETE_ACTIONS))
-		else:
-			self.action_space = Box(-1.0, 1.0, shape=(2,), dtype=np.uint8)
-		if config["use_depth_camera"]:
-			image_space = Box(
-				-1.0, 1.0, shape=(
-					config["y_res"], config["x_res"],
-					1 * config["framestack"]), dtype=np.float32)
-		else:
-			image_space = Box(
-				0.0, 255.0, shape=(
-					config["y_res"], config["x_res"],
-					3 * config["framestack"]), dtype=np.float32)
-		if self.config["use_image_only_observations"]:
-			self.observation_space = image_space
-		else:
-			self.observation_space = Tuple(
-				[image_space,
-				 Discrete(len(COMMANDS_ENUM)),  # next_command
-				 Box(-128.0, 128.0, shape=(2,), dtype=np.float32)])  # forward_speed, dist to goal
-
+		# GYM parameters
 		self._spec = lambda: None
 		self._spec.id = "CarlaEnv-v0"
-		self._seed = ENV_CONFIG["seed"]
+		self._seed = 1
+		self.action_space = Box(-1.0, 1.0, shape=(2,), dtype=np.uint8)
+		self.observation_space = Box(0.0, 255.0, shape=(args.height, args.width,3), dtype=np.float32)
 
-
+		# RL variables
 		self.num_steps = 0
 		self.total_reward = 0
 		self.prev_measurement = None
-		self.prev_image = None
 		self.episode_id = None
-		self.measurements_file = None
-		self.weather = None
-		self.scenario = None
 		self.start_pos = None
-		self.end_pos = None
-		self.start_coord = None
-		self.end_coord = None
 		self.last_obs = None
+		self.last_collision_frame = 0
 
 	def start_server(self):
+		'''
+		Starts the server process and blocks by wait_time to ensure proper connection
+		'''
 		self.server = subprocess.Popen(
 			[SERVER_BINARY,"-windowed", "-ResX=400", "-ResY=300"],
 			preexec_fn=os.setsid, stdout=open(os.devnull, "w"))
 
 		live_carla_processes.add(os.getpgid(self.server.pid))
-		#Wait time for the server to start before attempting connection
+		# Wait time for the server to start before attempting client connection
 		time.sleep(self.config["wait_time"])
 
 	def start_client(self):
+		'''
+		Starts the client, attempts server connection, and sets up the CARLA world.
+		'''
 		pygame.init()
 		pygame.font.init()
 		self.clock = pygame.time.Clock()
@@ -185,10 +156,9 @@ class CarlaEnv(gym.Env):
 			self.display = pygame.display.set_mode(
 				(self.args.width, self.args.height),
 				pygame.HWSURFACE | pygame.DOUBLEBUF)
-
 			self.hud = HUD(self.args.width, self.args.height)
 			self.world = World(self.client.get_world(), self.hud, self.args.filter, self.args.rolename)
-			self.controller = KeyboardControl(self.world, self.args.autopilot)
+			self.controller = KeyboardControl(self.world)
 			self.clock.tick_busy_loop(60)
 		except ConnectionError:
 			print('Client couldn\'t connect properly, please retry.')
@@ -198,20 +168,68 @@ class CarlaEnv(gym.Env):
 		self.start_server()
 		self.start_client()
 		self.world.restart()
-		obs = None
-		while (obs == None):
-			obs = self.reset_env()
+		obs = []
+		while (obs == []):
+			obs = self.reset_env() # blocks the client until proper connection has been established and an image has been received
 		return obs
 	
 	def reset_env(self):
-		#reset all variables here
+		# Reset all variables here
 		self.num_steps = 0
 		self.total_reward = 0
 		self.prev_measurement = None
 		self.prev_image = None
 		self.episode_id = datetime.date.today().strftime("%Y-%m-%d_%H-%M-%S_%f")
-		self.measurements_file = None
-		return self.world.camera_manager.image 
+		obs = self.world.get_image()
+		self.prev_measurement = self.get_measurements()
+		self.start_pos = [self.prev_measurement['x'],self.prev_measurement['y']]
+		if (obs != None):
+			return self.preprocess_img(obs)
+
+	def get_measurements(self):
+		loc, vel, wp = self.world.get_vehicle_data()
+		if (self.start_pos):
+			# if backward distance should be negative, remove norm (absolute)
+			dist_from_start = float(np.linalg.norm([loc.x - self.start_pos[0], loc.y - self.start_pos[1]]) / 100)
+		else:
+			dist_from_start = 0
+
+		frame, intensity = self.world.get_collision_reading() # Could be split into individual impulses based on the types of actors
+
+		if (frame > self.last_collision_frame):
+			curr_collision = intensity
+			self.last_collision_frame = frame
+		else:
+			curr_collision = 0
+
+		measurements = {
+			"episode_id": self.episode_id,
+			"step": self.num_steps,
+			"wp_x": wp.transform.location.x,
+			"wp_y": wp.transform.location.y,
+			"wp_pitch": wp.transform.rotation.pitch,
+			"wp_yaw": wp.transform.rotation.yaw,
+			"wp_roll": wp.transform.rotation.roll,
+			"x": loc.x,
+			"y": loc.y,
+			"speed": vel,
+			"dist": dist_from_start,
+			"max_steps": self.config["max_steps"],
+			"collision": curr_collision
+		}
+
+		# Find these intersections using LaneInvasionSensor
+		# "intersection_offroad": wp.intersection_offroad,
+		# "intersection_otherlane": wp.intersection_otherlane
+
+		return measurements
+
+	def preprocess_img(self,image):
+		array = np.frombuffer(image.raw_data, dtype=np.dtype("uint8"))
+		array = np.reshape(array, (image.height, image.width, 4))
+		array = array[:, :, :3]
+		array = array[:, :, ::-1]
+		return array
 
 	def step(self,action):
 		if self.controller.parse_events(self.client, self.world, self.clock):
@@ -240,11 +258,74 @@ class CarlaEnv(gym.Env):
 				"steer", steer, "throttle", throttle, "brake", brake,
 				"reverse", reverse)
 
-		#edit, make sure vehicle is in autonomous mode
+		# Assumes vehicle is in autonomous mode
 		self.controller.apply_autonomous_control(self.world,throttle=throttle, steer=steer, brake=brake, 
 										hand_brake=hand_brake, reverse=reverse)
-		return 0,0,0,0
 
+		# Getting observations
+		image = None
+		while (not image): # will only block in case of connection/computing delay
+			image = self.world.get_image()
+		obs = self.preprocess_img(image)
+
+		# Getting info/measurements
+		curr_measurement = self.get_measurements()
+		if type(action) is np.ndarray:
+			curr_measurement["action"] = [float(a) for a in action]
+		else:
+			curr_measurement["action"] = action
+
+		curr_measurement["control"] = {
+			"steer": steer,
+			"throttle": throttle,
+			"brake": brake,
+			"reverse": reverse,
+			"hand_brake": hand_brake,
+		}
+
+		# Getting reward
+		reward = self.calculate_reward(curr_measurement)
+		self.total_reward += reward
+		curr_measurement["reward"] = reward
+		curr_measurement["total_reward"] = self.total_reward
+
+		# Checking whether episode should terminate
+		done = (self.num_steps > self.config["max_steps"] or
+				(self.config["early_terminate_on_collision"] and
+				 self.check_collision(curr_measurement)))
+		curr_measurement["done"] = done
+		self.prev_measurement = curr_measurement
+		self.num_steps += 1
+		self.last_obs = obs
+		return obs,reward,done,curr_measurement
+
+	def calculate_reward(self,curr_measurement):
+		
+		reward = 0.0
+
+		# Distance travelled from the start point in m
+		cur_dist = curr_measurement["dist"]
+		prev_dist = self.prev_measurement["dist"]
+		
+		reward += np.clip(prev_dist - cur_dist, -10.0, 10.0)
+
+		# Change in speed (km/hr)
+		reward += 0.05 * (curr_measurement["speed"] - self.prev_measurement["speed"])
+
+		# Collision damage
+		reward -= .00002 * (curr_measurement["collision"] - self.prev_measurement["collision"])
+
+		# The following two need to be updated in the API - LaneInvasionSensor should be used.
+
+		# Offroad intersection
+
+
+		# Opposite Lane intersection
+
+		return reward
+
+	def check_collision(measurement):
+		return bool(measurement["collision"] > 0 or measurement["total_reward"] < -100)
 
 	def clear_server_state(self):
 		if (self.world and self.world.recording_enabled):
@@ -264,7 +345,7 @@ class CarlaEnv(gym.Env):
 
 def main():
 	argparser = argparse.ArgumentParser(
-		description='CARLA Manual Control Client')
+		description='CARLA Autonomous Driving Simulator - 0.9.5')
 	argparser.add_argument(
 		'-v', '--verbose',
 		action='store_true',
@@ -282,19 +363,15 @@ def main():
 		type=int,
 		help='TCP port to listen to (default: 2000)')
 	argparser.add_argument(
-		'-a', '--autopilot',
-		action='store_true',
-		help='enable autopilot')
-	argparser.add_argument(
 		'--res',
 		metavar='WIDTHxHEIGHT',
-		default='1280x720',
-		help='window resolution (default: 1280x720)')
+		default='800x600',
+		help='window resolution (default: 800x600)')
 	argparser.add_argument(
 		'--filter',
 		metavar='PATTERN',
-		default='vehicle.*',
-		help='actor filter (default: "vehicle.*")')
+		default='vehicle.dodge_charger.*',
+		help='actor filter (default: "vehicle.dodge_charger.*")') #for random vehicle, use vehicle.*
 	argparser.add_argument(
 		'--rolename',
 		metavar='NAME',
@@ -317,6 +394,17 @@ def main():
 	except KeyboardInterrupt:
 		print('\nCancelled by user. Bye!')
 
+
+live_carla_processes = set()  # To keep track of all the Carla processes we launch to make the cleanup easier
+
+# Default cleanup function to be executed at program termination - cleans all instances and frees memory
+
+def cleanup():
+	print("Killing live carla processes", live_carla_processes)
+	for pgid in live_carla_processes:
+		os.killpg(pgid, signal.SIGKILL)
+atexit.register(cleanup)
+
 def rl_loop(args):
 	for _ in range(5):
 		env = CarlaEnv(args)
@@ -326,9 +414,8 @@ def rl_loop(args):
 		total_reward = 0.0
 		while not done:
 			t += 1
-			obs, reward, done, info = env.step(DISCRETE_ACTIONS[random.randint(0,len(DISCRETE_ACTIONS)-1)])  # Full throttle, zero steering angle
-			total_reward += reward		
-		break
+			obs, reward, done, info = env.step(DISCRETE_ACTIONS[5])  # Full throttle, zero steering angle
+			total_reward += reward
 
 if __name__ == "__main__":
 	main()
