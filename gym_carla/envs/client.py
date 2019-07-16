@@ -218,19 +218,17 @@ class World(object):
 		vel = self.player.get_velocity()
 		vel = 3.6 * math.sqrt(vel.x**2 + vel.y**2 + vel.z**2) # converting vector to scalar speed in km/hr
 		wp = self.map.get_waypoint(loc)
-		return loc, vel, wp
-		# return {'waypoint':wp,'id':wp.id,'transform':wp.transform,'is_junction':wp.is_junction,
-		# 		'lane_width':wp.lane_width,'road_id':wp.road_id,
-		# 		'section_id':wp.section_id,'lane_id':wp.lane_id,
-		# 		'opendrive_sVal':wp.s,'lane_change':wp.lane_change,
-		# 		'lane_type':wp.lane_type,'right_lane_marking':wp.right_lane_marking,
-		# 		'left_lane_marking':wp.left_lane_marking}
+		off_track = self.is_offlane()
+		return loc, vel, wp, off_track
 
 	def get_image(self):
 		return self.camera_manager.image
 
 	def get_collision_reading(self):
 		return self.collision_sensor.reading
+
+	def is_offlane(self):
+		return not bool(self.map.get_waypoint(self.player.get_location(),project_to_road=False))
 
 	def destroy(self):
 		actors = [

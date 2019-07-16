@@ -1,13 +1,16 @@
 # CARLA 0.9.5 - OpenAI Gym Implementation
 
 ## Main Environment:
-env_base/carla_base_env.py
+gym_carla/envs/carla_env.py
 
 ## API-Client Implementation:
-env_base/client.py
+gym_carla/envs/client.py
 
 ## RoadRunner Map Files:
 RoadRunnerFiles/
+
+## Default GYM Baselines:
+gym_baselines/
 
 ## Tested with:
 - CARLA 0.9.5
@@ -15,4 +18,13 @@ RoadRunnerFiles/
 - OpenAI GYM 0.13.0
 - Python 3.5
 
+## Installation
 
+cd gym-carla
+pip install -e .
+
+Add the following lines to ~/.bashrc:
+`export UE4_ROOT=~/UnrealEngine_4.22
+PYTHONPATH="/home/ugrads/o/osamausf/Desktop/Simulator Framework - CARLA 0.9.5/gym-carla/gym_carla/dist/carla-0.9.5-py3.5-linux-x86_64.egg":$PYTHONPATH
+PYTHONPATH="/home/ugrads/o/osamausf/Desktop/Simulator Framework - CARLA 0.9.5/gym-carla/gym_carla/envs":$PYTHONPATH
+export PYTHONPATH`

@@ -52,6 +52,7 @@ try:
 except IndexError:
 	pass
 
+print(sys.path)
 # Packages/Modules
 
 import argparse
@@ -63,7 +64,7 @@ import signal
 import traceback
 import time
 import atexit
-import datetime 
+import datetime
 import random
 import client
 from client import *
@@ -74,6 +75,7 @@ from gym.spaces import Box
 SERVER_BINARY = os.environ.get("CARLA_SERVER", os.path.expanduser("~/Desktop/Packaged-CARLA-0.9.5/LinuxNoEditor/CarlaUE4.sh"))
 assert os.path.exists(SERVER_BINARY), "CARLA_SERVER environment variable is not set properly. Please check and retry"
 
+print(sys.path)
 # The default environment configuration
 
 ENV_CONFIG = {
@@ -86,6 +88,8 @@ ENV_CONFIG = {
 }
 
 # The discrete action space
+# [a , b] => a -> Throttle/Brake, b -> Direction
+# : a & b -> floats, [-1,1]
 
 DISCRETE_ACTIONS = {
 	0: [0.0, 0.0],    # Coast
@@ -187,7 +191,7 @@ class CarlaEnv(gym.Env):
 			return self.preprocess_img(obs)
 
 	def get_measurements(self):
-		loc, vel, wp = self.world.get_vehicle_data()
+		loc, vel, wp, off_track = self.world.get_vehicle_data()
 		if (self.start_pos):
 			# if backward distance should be negative, remove norm (absolute)
 			dist_from_start = float(np.linalg.norm([loc.x - self.start_pos[0], loc.y - self.start_pos[1]]) / 100)
@@ -215,13 +219,13 @@ class CarlaEnv(gym.Env):
 			"speed": vel,
 			"dist": dist_from_start,
 			"max_steps": self.config["max_steps"],
-			"collision": curr_collision
+			"collision": curr_collision,
+			"off_track": off_track
 		}
 
-		# Find these intersections using LaneInvasionSensor
+		# Find these intersections using LaneInvasionSensor, fix RoadRunner lanes first
 		# "intersection_offroad": wp.intersection_offroad,
 		# "intersection_otherlane": wp.intersection_otherlane
-
 		return measurements
 
 	def preprocess_img(self,image):
@@ -315,13 +319,22 @@ class CarlaEnv(gym.Env):
 		# Collision damage
 		reward -= .00002 * (curr_measurement["collision"] - self.prev_measurement["collision"])
 
+		# Offlane/onlane penalty/awards
+
+		if (curr_measurement["off_track"] and not self.prev_measurement["off_track"]): # car got off track
+			reward -= 0.025 
+		elif (curr_measurement["off_track"] and self.prev_measurement["off_track"]): # car has been off track
+			reward -= 0.05
+		elif (not curr_measurement["off_track"] and self.prev_measurement["off_track"]): # car back to track
+			reward += 0.1
+		else: # car has been on track
+			reward += 0.025
+
 		# The following two need to be updated in the API - LaneInvasionSensor should be used.
 
-		# Offroad intersection
+		# Offroad intersection %
 
-
-		# Opposite Lane intersection
-
+		# Opposite Lane intersection %
 		return reward
 
 	def check_collision(measurement):
@@ -416,6 +429,9 @@ def rl_loop(args):
 			t += 1
 			obs, reward, done, info = env.step(DISCRETE_ACTIONS[5])  # Full throttle, zero steering angle
 			total_reward += reward
+			if (t % 100 == 0):
+				print("step#:", t, "reward:", round(reward, 4), "total_reward:", round(total_reward, 4), "done:", done)
+		break
 
 if __name__ == "__main__":
 	main()
