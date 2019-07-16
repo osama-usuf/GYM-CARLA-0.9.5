@@ -20,11 +20,11 @@ gym_baselines/
 
 ## Installation
 
-cd gym-carla
-pip install -e .
+`cd gym-carla`
+`pip install -e .`
 
 Add the following lines to ~/.bashrc:
-`export UE4_ROOT=~/UnrealEngine_4.22
-PYTHONPATH="/home/ugrads/o/osamausf/Desktop/Simulator Framework - CARLA 0.9.5/gym-carla/gym_carla/dist/carla-0.9.5-py3.5-linux-x86_64.egg":$PYTHONPATH
-PYTHONPATH="/home/ugrads/o/osamausf/Desktop/Simulator Framework - CARLA 0.9.5/gym-carla/gym_carla/envs":$PYTHONPATH
-export PYTHONPATH`
+`export UE4_ROOT=~/UnrealEngine_4.22`
+`PYTHONPATH="<path to repository>/gym-carla/gym_carla/dist/carla-0.9.5-py3.5-linux-x86_64.egg":$PYTHONPATH`
+`PYTHONPATH="<path to repository>/gym-carla/gym_carla/envs":$PYTHONPATH`
+`export PYTHONPATH`
