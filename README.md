@@ -1,16 +1,16 @@
 # CARLA 0.9.5 - OpenAI Gym Implementation
 
 ## Main Environment:
-gym_carla/envs/carla_env.py
+`gym_carla/envs/carla_env.py`
 
 ## API-Client Implementation:
-gym_carla/envs/client.py
+`gym_carla/envs/client.py`
 
 ## RoadRunner Map Files:
-RoadRunnerFiles/
+`RoadRunnerFiles/`
 
 ## Default GYM Baselines:
-gym_baselines/
+`gym_baselines/`
 
 ## Tested with:
 - CARLA 0.9.5
@@ -20,11 +20,17 @@ gym_baselines/
 
 ## Installation
 
-`cd gym-carla`
-`pip install -e .`
+```
+cd gym-carla
+pip install -e .
+```
 
-Add the following lines to ~/.bashrc:
-`export UE4_ROOT=~/UnrealEngine_4.22`
-`PYTHONPATH="<path to repository>/gym-carla/gym_carla/dist/carla-0.9.5-py3.5-linux-x86_64.egg":$PYTHONPATH`
-`PYTHONPATH="<path to repository>/gym-carla/gym_carla/envs":$PYTHONPATH`
-`export PYTHONPATH`
+
+Add the following lines to `~/.bashrc`:
+
+```
+export UE4_ROOT=~/UnrealEngine_4.22
+PYTHONPATH="<path to repository>/gym-carla/gym_carla/dist/carla-0.9.5-py3.5-linux-x86_64.egg":$PYTHONPATH
+PYTHONPATH="<path to repository>/gym-carla/gym_carla/envs":$PYTHONPATH
+export PYTHONPATH
+```
