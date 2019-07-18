@@ -52,7 +52,6 @@ try:
 except IndexError:
 	pass
 
-print(sys.path)
 # Packages/Modules
 
 import argparse
@@ -75,7 +74,6 @@ from gym.spaces import Box
 SERVER_BINARY = os.environ.get("CARLA_SERVER", os.path.expanduser("~/Desktop/Packaged-CARLA-0.9.5/LinuxNoEditor/CarlaUE4.sh"))
 assert os.path.exists(SERVER_BINARY), "CARLA_SERVER environment variable is not set properly. Please check and retry"
 
-print(sys.path)
 # The default environment configuration
 
 ENV_CONFIG = {
@@ -120,12 +118,11 @@ class CarlaEnv(gym.Env):
 		self.config = config
 
 		# GYM parameters
-		self._spec = lambda: None
-		self._spec.id = "CarlaEnv-v0"
-		self._seed = 1
-		self.action_space = Box(-1.0, 1.0, shape=(2,), dtype=np.uint8)
-		self.observation_space = Box(0.0, 255.0, shape=(args.height, args.width,3), dtype=np.float32)
-
+		self.spec = lambda: None
+		self.spec.id = "CarlaEnv-v0"
+		self.seed = 1
+		self.action_space = Box(1.0, 1.0, shape=(2,))
+		self.observation_space = Box(0.0, 255.0, shape=(args.height, args.width,3))
 		# RL variables
 		self.num_steps = 0
 		self.total_reward = 0
@@ -189,6 +186,7 @@ class CarlaEnv(gym.Env):
 		self.start_pos = [self.prev_measurement['x'],self.prev_measurement['y']]
 		if (obs != None):
 			return self.preprocess_img(obs)
+		return []
 
 	def get_measurements(self):
 		loc, vel, wp, off_track = self.world.get_vehicle_data()
@@ -328,7 +326,7 @@ class CarlaEnv(gym.Env):
 		elif (not curr_measurement["off_track"] and self.prev_measurement["off_track"]): # car back to track
 			reward += 0.1
 		else: # car has been on track
-			reward += 0.025
+			reward += 0.0001
 
 		# The following two need to be updated in the API - LaneInvasionSensor should be used.
 
