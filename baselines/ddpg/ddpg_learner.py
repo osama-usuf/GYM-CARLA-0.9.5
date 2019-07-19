@@ -145,6 +145,12 @@ class DDPG(object):
 
         self.initial_state = None # recurrent architectures not supported yet
 
+    def save(self, path):
+        U.save_variables(path, sess=self.sess)
+
+    def load(self, path):
+        U.load_variables(path, sess=self.sess)
+
     def setup_target_network_updates(self):
         actor_init_updates, actor_soft_updates = get_target_updates(self.actor.vars, self.target_actor.vars, self.tau)
         critic_init_updates, critic_soft_updates = get_target_updates(self.critic.vars, self.target_critic.vars, self.tau)
@@ -271,19 +277,16 @@ class DDPG(object):
             noise = self.action_noise()
             assert noise.shape == action[0].shape
             action += noise
-        action = np.clip(action, self.action_range[0], self.action_range[1])
+        action = np.clip(action, self.action_range[0], self.action_range[1])[0]
 
 
         return action, q, None, None
 
     def store_transition(self, obs0, action, reward, obs1, terminal1):
         reward *= self.reward_scale
-
-        B = obs0.shape[0]
-        for b in range(B):
-            self.memory.append(obs0[b], action[b], reward[b], obs1[b], terminal1[b])
-            if self.normalize_observations:
-                self.obs_rms.update(np.array([obs0[b]]))
+        self.memory.append(obs0, action, reward, obs1, terminal1)
+        if self.normalize_observations:
+            self.obs_rms.update(np.array([obs0]))
 
     def train(self):
         # Get a batch.

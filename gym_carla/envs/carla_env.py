@@ -137,7 +137,7 @@ class CarlaEnv(gym.Env):
 		Starts the server process and blocks by wait_time to ensure proper connection
 		'''
 		self.server = subprocess.Popen(
-			[SERVER_BINARY,"-windowed", "-ResX=400", "-ResY=300"],
+			[SERVER_BINARY,"-windowed", "-ResX=1280", "-ResY=720"],
 			preexec_fn=os.setsid, stdout=open(os.devnull, "w"))
 
 		live_carla_processes.add(os.getpgid(self.server.pid))
@@ -250,6 +250,7 @@ class CarlaEnv(gym.Env):
 			return (self.last_obs, 0.0, True, {})
 
 	def step_env(self,action):
+		#print('\n\nSTEPPING ACTION:',action,'\n\n')
 		throttle = float(np.clip(action[0], 0, 1))
 		brake = float(np.abs(np.clip(action[0], -1, 0)))
 		steer = float(np.clip(action[1], -1, 1))
