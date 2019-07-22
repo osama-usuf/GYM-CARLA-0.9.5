@@ -1,18 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright (c) 2019 Computer Vision Center (CVC) at the Universitat Autonoma de
-# Barcelona (UAB).
-#
-# This work is licensed under the terms of the MIT license.
-# For a copy, see <https://opensource.org/licenses/MIT>.
-
-# Adapted from PythonAPI/manual_control.py from CARLA 0.9.5 Release.
-
 """
-Welcome to CARLA manual control.
-
-Use ARROWS or WASD keys for control.
-
 	W            : throttle
 	S            : brake
 	AD           : steer
@@ -173,12 +161,25 @@ class World(object):
 			blueprint.set_attribute('color', color)
 		# Spawn the player.
 		if self.player is not None:
+
+			spawn_points = self.map.get_spawn_points()
+			spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()
+			spawn_point.location.z += 2.0
+			spawn_point.rotation.roll = 0.0
+			spawn_point.rotation.pitch = 0.0
+			self.destroy()
+			self.player = self.world.try_spawn_actor(blueprint, spawn_point)
+		
+			''' 
+			uncomment to spawn at same point 
+			
 			spawn_point = self.player.get_transform()
 			spawn_point.location.z += 2.0
 			spawn_point.rotation.roll = 0.0
 			spawn_point.rotation.pitch = 0.0
 			self.destroy()
 			self.player = self.world.try_spawn_actor(blueprint, spawn_point)
+			'''
 		while self.player is None:
 			spawn_points = self.map.get_spawn_points()
 			spawn_point = random.choice(spawn_points) if spawn_points else carla.Transform()

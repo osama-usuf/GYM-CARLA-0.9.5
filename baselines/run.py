@@ -62,25 +62,25 @@ def train(args, extra_args):
 	alg_kwargs = get_learn_function_defaults(args.alg, env_type)
 	alg_kwargs.update(extra_args)
 
-	for nb_ep in range(5):
-		print("\n\nEPISODE",nb_ep,"\n\n")
-		env = build_env(args)
-		if args.save_video_interval != 0:
-			env = VecVideoRecorder(env, osp.join(logger.get_dir(), "videos"), record_video_trigger=lambda x: x % args.save_video_interval == 0, video_length=args.save_video_length)
-		if args.network:
-			alg_kwargs['network'] = args.network
-		else:
-			if alg_kwargs.get('network') is None:
-				alg_kwargs['network'] = get_default_network(env_type)
+	env = build_env(args)
+	if args.save_video_interval != 0:
+		env = VecVideoRecorder(env, osp.join(logger.get_dir(), "videos"), record_video_trigger=lambda x: x % args.save_video_interval == 0, video_length=args.save_video_length)
 
-		print('Training {} on {}:{} with arguments \n{}'.format(args.alg, env_type, env_id, alg_kwargs))
-		print('\n\nLearning\n\n')
-		model = learn(
-			env=env,
-			seed=seed,
-			total_timesteps=total_timesteps,
-			**alg_kwargs
-		)
+	if args.network:
+		alg_kwargs['network'] = args.network
+	else:
+		if alg_kwargs.get('network') is None:
+			alg_kwargs['network'] = get_default_network(env_type)
+
+	print('Training {} on {}:{} with arguments \n{}'.format(args.alg, env_type, env_id, alg_kwargs))
+
+	model = learn(
+		env=env,
+		seed=seed,
+		total_timesteps=total_timesteps,
+		**alg_kwargs
+	)
+
 	return model, env
 
 def build_env(args):
@@ -156,7 +156,6 @@ def get_alg_module(alg, submodule=None):
 	except ImportError:
 		# then from rl_algs
 		alg_module = import_module('.'.join(['rl_' + 'algs', alg, submodule]))
-
 	return alg_module
 
 
@@ -238,9 +237,7 @@ def main(args):
 				print('episode_rew={}'.format(episode_rew))
 				episode_rew = 0
 				obs = env.reset()
-
 	env.close()
-
 	return model
 
 if __name__ == '__main__':

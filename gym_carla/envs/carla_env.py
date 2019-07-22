@@ -1,4 +1,3 @@
-
 """
 OpenAI Gym compatible Driving simulation environment based on Carla 0.9.5.
 
@@ -78,11 +77,10 @@ assert os.path.exists(SERVER_BINARY), "CARLA_SERVER environment variable is not 
 
 ENV_CONFIG = {
 	"discrete_actions": True,
-	"early_terminate_on_collision": True,
 	"verbose": False,
-	"wait_time": 5,
-	"max_steps": 5000,
-	"early_terminate_on_collision":False
+	"wait_time": 10,
+	"max_steps": 9500,
+	"early_terminate_on_collision": True
 }
 
 # The discrete action space
@@ -142,12 +140,13 @@ class CarlaEnv(gym.Env):
 
 		live_carla_processes.add(os.getpgid(self.server.pid))
 		# Wait time for the server to start before attempting client connection
-		time.sleep(self.config["wait_time"])
+		
 
 	def start_client(self):
 		'''
 		Starts the client, attempts server connection, and sets up the CARLA world.
 		'''
+		time.sleep(self.config["wait_time"])
 		pygame.init()
 		pygame.font.init()
 		self.clock = pygame.time.Clock()
@@ -165,9 +164,9 @@ class CarlaEnv(gym.Env):
 			print('Client couldn\'t connect properly, please retry.')
 
 	def reset(self):
-		pygame.quit()
-		self.start_server()
-		self.start_client()
+		if (not self.server):
+			self.start_server()
+			self.start_client()
 		self.world.restart()
 		obs = []
 		while (obs == []):
@@ -336,8 +335,8 @@ class CarlaEnv(gym.Env):
 		# Opposite Lane intersection %
 		return reward
 
-	def check_collision(measurement):
-		return bool(measurement["collision"] > 0 or measurement["total_reward"] < -100)
+	def check_collision(self,measurement):
+		return bool(measurement["collision"] > 0 or measurement["total_reward"] < -200)
 
 	def clear_server_state(self):
 		if (self.world and self.world.recording_enabled):
@@ -345,7 +344,6 @@ class CarlaEnv(gym.Env):
 		if self.world is not None:
 			self.world.destroy()
 		pygame.quit()
-		print('cleaning server')
 		if (self.server):
 			pgid = os.getpgid(self.server.pid)
 			os.killpg(pgid,signal.SIGKILL)
@@ -412,14 +410,15 @@ live_carla_processes = set()  # To keep track of all the Carla processes we laun
 # Default cleanup function to be executed at program termination - cleans all instances and frees memory
 
 def cleanup():
-	print("Killing live carla processes", live_carla_processes)
+	print("\nKilling live carla processes", live_carla_processes)
 	for pgid in live_carla_processes:
 		os.killpg(pgid, signal.SIGKILL)
 atexit.register(cleanup)
 
 def rl_loop(args):
-	for _ in range(5):
-		env = CarlaEnv(args)
+	env = CarlaEnv(args)
+	for ep in range(5):
+		print('\nEpisode: ',ep)
 		obs = env.reset()
 		done = False
 		t = 0
@@ -430,7 +429,7 @@ def rl_loop(args):
 			total_reward += reward
 			if (t % 100 == 0):
 				print("step#:", t, "reward:", round(reward, 4), "total_reward:", round(total_reward, 4), "done:", done)
-		break
+		
 
 if __name__ == "__main__":
 	main()
