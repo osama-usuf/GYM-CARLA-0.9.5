@@ -119,7 +119,7 @@ class CarlaEnv(gym.Env):
 		self.spec = lambda: None
 		self.spec.id = "CarlaEnv-v0"
 		self.seed = 1
-		self.action_space = Box(1.0, 1.0, shape=(2,))
+		self.action_space = Box(-1.0, 1.0, shape=(2,))
 		self.observation_space = Box(0.0, 255.0, shape=(args.height, args.width,3))
 		# RL variables
 		self.num_steps = 0
@@ -182,6 +182,13 @@ class CarlaEnv(gym.Env):
 		self.episode_id = datetime.date.today().strftime("%Y-%m-%d_%H-%M-%S_%f")
 		obs = self.world.get_image()
 		self.prev_measurement = self.get_measurements()
+		self.prev_measurement["control"] = {
+			"steer": 0,
+			"throttle": 0,
+			"brake": 0,
+			"reverse": False,
+			"hand_brake": False,
+		}
 		self.start_pos = [self.prev_measurement['x'],self.prev_measurement['y']]
 		if (obs != None):
 			return self.preprocess_img(obs)
@@ -304,36 +311,66 @@ class CarlaEnv(gym.Env):
 	def calculate_reward(self,curr_measurement):
 		
 		reward = 0.0
-
-		# Distance travelled from the start point in m
-		cur_dist = curr_measurement["dist"]
-		prev_dist = self.prev_measurement["dist"]
 		
-		reward += np.clip(prev_dist - cur_dist, -10.0, 10.0)
+		# if +ve distance has been covered relative to the start point
+		if (self.prev_measurement["dist"] < curr_measurement["dist"]):
+			reward += 0.02 * curr_measurement["dist"]
+		# +ve reward for good speed
+		reward += 0.0005 * curr_measurement["speed"]
 
-		# Change in speed (km/hr)
-		reward += 0.05 * (curr_measurement["speed"] - self.prev_measurement["speed"])
+		# -ve reward for continuous deceleration/idle positioning
+		#prev_throttle = self.prev_measurement["control"]["throttle"]
+		curr_brake = curr_measurement["control"]["brake"]
+		if (curr_brake > 0.0):
+			reward -= 0.02 * curr_brake
+		else:
+			reward += 0.005 * curr_measurement["control"]["throttle"]
 
 		# Collision damage
 		reward -= .00002 * (curr_measurement["collision"] - self.prev_measurement["collision"])
 
 		# Offlane/onlane penalty/awards
 
-		if (curr_measurement["off_track"] and not self.prev_measurement["off_track"]): # car got off track
-			reward -= 0.025 
-		elif (curr_measurement["off_track"] and self.prev_measurement["off_track"]): # car has been off track
-			reward -= 0.05
-		elif (not curr_measurement["off_track"] and self.prev_measurement["off_track"]): # car back to track
-			reward += 0.1
-		else: # car has been on track
-			reward += 0.0001
+		# if (curr_measurement["off_track"] and not self.prev_measurement["off_track"]): # car got off track
+		# 	reward -= 0.025 
+		# elif (curr_measurement["off_track"] and self.prev_measurement["off_track"]): # car has been off track
+		# 	reward -= 0.05
+		# elif (not curr_measurement["off_track"] and self.prev_measurement["off_track"]): # car back to track
+		# 	reward += 0.1
+		# else: # car has been on track
+		# 	reward += 0
+
+		return reward
+
+		# # Distance travelled from the start point in m
+		# cur_dist = curr_measurement["dist"]
+		# prev_dist = self.prev_measurement["dist"]
+		
+		# reward += np.clip(prev_dist - cur_dist, -10.0, 10.0)
+		# print('\n',temp)
+		# # Change in speed (km/hr)
+		# reward += 0.05 * (curr_measurement["speed"] - self.prev_measurement["speed"])
+
+		# # Collision damage
+		# reward -= .00002 * (curr_measurement["collision"] - self.prev_measurement["collision"])
+
+		# # Offlane/onlane penalty/awards
+
+		# if (curr_measurement["off_track"] and not self.prev_measurement["off_track"]): # car got off track
+		# 	reward -= 0.025 
+		# elif (curr_measurement["off_track"] and self.prev_measurement["off_track"]): # car has been off track
+		# 	reward -= 0.05
+		# elif (not curr_measurement["off_track"] and self.prev_measurement["off_track"]): # car back to track
+		# 	reward += 0.1
+		# else: # car has been on track
+		# 	reward += 0.0001
 
 		# The following two need to be updated in the API - LaneInvasionSensor should be used.
 
 		# Offroad intersection %
 
 		# Opposite Lane intersection %
-		return reward
+		#return reward
 
 	def check_collision(self,measurement):
 		return bool(measurement["collision"] > 0 or measurement["total_reward"] < -200)
@@ -425,7 +462,7 @@ def rl_loop(args):
 		total_reward = 0.0
 		while not done:
 			t += 1
-			obs, reward, done, info = env.step(DISCRETE_ACTIONS[5])  # Full throttle, zero steering angle
+			obs, reward, done, info = env.step([-0.79674, 0.9927075])  # Full throttle, zero steering angle
 			total_reward += reward
 			if (t % 100 == 0):
 				print("step#:", t, "reward:", round(reward, 4), "total_reward:", round(total_reward, 4), "done:", done)

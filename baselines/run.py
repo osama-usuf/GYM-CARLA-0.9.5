@@ -156,6 +156,7 @@ def get_alg_module(alg, submodule=None):
 	except ImportError:
 		# then from rl_algs
 		alg_module = import_module('.'.join(['rl_' + 'algs', alg, submodule]))
+
 	return alg_module
 
 
@@ -237,7 +238,9 @@ def main(args):
 				print('episode_rew={}'.format(episode_rew))
 				episode_rew = 0
 				obs = env.reset()
+
 	env.close()
+
 	return model
 
 if __name__ == '__main__':

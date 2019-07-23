@@ -22,7 +22,7 @@ def learn(network, env,
 		  seed=None,
 		  total_timesteps=None,
 		  nb_epochs=None, # with default settings, perform 1M steps total
-		  nb_epoch_cycles=1000,
+		  nb_epoch_cycles=10,
 		  nb_rollout_steps=10000,
 		  reward_scale=1.0,
 		  render=False,
@@ -30,16 +30,16 @@ def learn(network, env,
 		  noise_type='adaptive-param_0.2',
 		  normalize_returns=False,
 		  normalize_observations=True,
-		  critic_l2_reg=1e-2,
-		  actor_lr=1e-4,
-		  critic_lr=1e-3,
+		  critic_l2_reg=10e-2,
+		  actor_lr=10e-4,
+		  critic_lr=10e-3,
 		  popart=False,
 		  gamma=0.99,
 		  clip_norm=None,
 		  nb_train_steps=50, # per epoch cycle and MPI worker,
 		  nb_eval_steps=100,
 		  batch_size=64, # per MPI worker
-		  tau=0.01,
+		  tau=0.001,
 		  eval_env=None,
 		  param_noise_adaption_interval=50,
 		  load_path=None,
@@ -59,7 +59,7 @@ def learn(network, env,
 	nb_actions = env.action_space.shape[-1]
 	assert (np.abs(env.action_space.low) == env.action_space.high).all()  # we assume symmetric actions.
 
-	memory = Memory(limit=int(1e3), action_shape=env.action_space.shape, observation_shape=env.observation_space.shape)
+	memory = Memory(limit=int(1e5), action_shape=env.action_space.shape, observation_shape=env.observation_space.shape)
 	critic = Critic(network=network, **network_kwargs)
 	actor = Actor(nb_actions, network=network, **network_kwargs)
 
@@ -103,7 +103,6 @@ def learn(network, env,
 	if load_path is not None:
 		agent.load(load_path)
 	sess.graph.finalize()
-
 	agent.reset()
 	if eval_env is not None:
 		eval_obs = eval_env.reset()
@@ -112,8 +111,8 @@ def learn(network, env,
 	episode_reward = np.zeros(nenvs, dtype = np.float32) #vector
 	episode_step = np.zeros(nenvs, dtype = int) # vector
 	episodes = 0 #scalar
-	t = 0 # scalar
-
+	t = 0 # steps, scalar
+	total_t = 0 # total steps, scalar
 	epoch = 0
 	start_time = time.time()
 
@@ -144,6 +143,7 @@ def learn(network, env,
 				# note these outputs are batched from vecenv
 
 				t += 1
+				total_t += 1
 				episode_reward += r
 				episode_step += 1
 				if (t % 1000 == 0):
@@ -155,7 +155,7 @@ def learn(network, env,
 				obs = new_obs
 				
 				if done:
-					print('\nEpisode:', epoch_episodes,'complete.')
+					print('\nEpisode:', epoch_episodes+1,'complete.')
 					print('Total reward:',round(episode_reward[0], 4))
 					epoch_episode_rewards.append(episode_reward[0])
 					episode_rewards_history.append(episode_reward[0])
@@ -225,7 +225,7 @@ def learn(network, env,
 		combined_stats['train/loss_critic'] = np.mean(epoch_critic_losses)
 		combined_stats['train/param_noise_distance'] = np.mean(epoch_adaptive_distances)
 		combined_stats['total/duration'] = duration
-		combined_stats['total/steps_per_second'] = float(t) / float(duration)
+		combined_stats['total/steps_per_second'] = float(total_t) / float(duration)
 		combined_stats['total/episodes'] = episodes
 		combined_stats['rollout/episodes'] = epoch_episodes
 		combined_stats['rollout/actions_std'] = np.std(epoch_actions)
@@ -252,7 +252,7 @@ def learn(network, env,
 
 		# Total statistics.
 		combined_stats['total/epochs'] = epoch + 1
-		combined_stats['total/steps'] = t
+		combined_stats['total/steps'] = total_t
 
 		for key in sorted(combined_stats.keys()):
 			logger.record_tabular(key, combined_stats[key])
@@ -265,7 +265,7 @@ def learn(network, env,
 			if hasattr(env, 'get_state'):
 				with open(os.path.join(logdir, 'env_state.pkl'), 'wb') as f:
 					pickle.dump(env.get_state(), f)
-			if eval_env and hasattr(eval_env, 'get_state'):
+			if eval_env and hdasattr(eval_env, 'get_state'):
 				with open(os.path.join(logdir, 'eval_env_state.pkl'), 'wb') as f:
 					pickle.dump(eval_env.get_state(), f)
 

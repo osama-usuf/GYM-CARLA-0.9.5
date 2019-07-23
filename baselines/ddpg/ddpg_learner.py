@@ -273,13 +273,14 @@ class DDPG(object):
             action = self.sess.run(actor_tf, feed_dict=feed_dict)
             q = None
 
+        #print('\nACTION BEFORE NOISE:',action)
         if self.action_noise is not None and apply_noise:
             noise = self.action_noise()
             assert noise.shape == action[0].shape
             action += noise
         action = np.clip(action, self.action_range[0], self.action_range[1])[0]
-
-
+        #print('\nACTION AFTER NOISE:',action)
+        #print(self.action_range[0], self.action_range[1])
         return action, q, None, None
 
     def store_transition(self, obs0, action, reward, obs1, terminal1):
