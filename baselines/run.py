@@ -232,7 +232,7 @@ def main(args):
 
 			obs, rew, done, _ = env.step(actions)
 			episode_rew += rew[0] if isinstance(env, VecEnv) else rew
-			env.render()
+			#env.render()
 			done = done.any() if isinstance(done, np.ndarray) else done
 			if done:
 				print('episode_rew={}'.format(episode_rew))

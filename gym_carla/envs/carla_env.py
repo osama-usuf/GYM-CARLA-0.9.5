@@ -324,12 +324,15 @@ class CarlaEnv(gym.Env):
 		if (curr_brake > 0.0):
 			reward -= 0.02 * curr_brake
 		else:
-			reward += 0.005 * curr_measurement["control"]["throttle"]
+			reward += 0.05 * curr_measurement["control"]["throttle"]
 
 		# Collision damage
 		reward -= .00002 * (curr_measurement["collision"] - self.prev_measurement["collision"])
 
 		# Offlane/onlane penalty/awards
+
+		if (curr_measurement["off_track"]):
+			reward -= 0.025
 
 		# if (curr_measurement["off_track"] and not self.prev_measurement["off_track"]): # car got off track
 		# 	reward -= 0.025 

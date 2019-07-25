@@ -43,5 +43,5 @@ python3 -m baselines.run --alg=ddpg --env=CarlaEnv-v0 --num_timesteps=1e9 --res=
 
 For running trained model:
 ```
-python3 -m baselines.run --alg=ddpg --env=CarlaEnv-v0 --num_timesteps=1e9 --res=80x80 --load_path=./models/carla_10M_ddpg
+python3 -m baselines.run --alg=ddpg --env=CarlaEnv-v0 --num_timesteps=0 --res=80x80 --load_path=./models/carla_10M_ddpg --play
 ```
