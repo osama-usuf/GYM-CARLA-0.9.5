@@ -23,7 +23,7 @@ def learn(network, env,
 		  total_timesteps=None,
 		  nb_epochs=None, # with default settings, perform 1M steps total
 		  nb_epoch_cycles=10,
-		  nb_rollout_steps=10000,
+		  nb_rollout_steps=20000,
 		  reward_scale=1.0,
 		  render=False,
 		  render_eval=False,
@@ -36,7 +36,7 @@ def learn(network, env,
 		  popart=False,
 		  gamma=0.99,
 		  clip_norm=None,
-		  nb_train_steps=50, # per epoch cycle and MPI worker,
+		  nb_train_steps=100, # per epoch cycle and MPI worker,
 		  nb_eval_steps=100,
 		  batch_size=64, # per MPI worker
 		  tau=0.001,
@@ -135,6 +135,8 @@ def learn(network, env,
 			for t_rollout in range(nb_rollout_steps):
 				# Predict next action.
 				action, q, _, _ = agent.step(obs, apply_noise=True, compute_Q=True)
+				if action[0] < 0:
+					print('\nACTION',action)
 				# Execute next action.
 				if rank == 0 and render:
 					env.render()

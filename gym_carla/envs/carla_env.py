@@ -79,7 +79,7 @@ ENV_CONFIG = {
 	"discrete_actions": True,
 	"verbose": False,
 	"wait_time": 10,
-	"max_steps": 9500,
+	"max_steps": 19500,
 	"early_terminate_on_collision": True
 }
 
@@ -120,15 +120,17 @@ class CarlaEnv(gym.Env):
 		self.spec.id = "CarlaEnv-v0"
 		self.seed = 1
 		self.action_space = Box(-1.0, 1.0, shape=(2,))
+		#self.action_space = Box(low=np.array([0.0,-1.0]),high=np.array([1.0,1.0]))
 		self.observation_space = Box(0.0, 255.0, shape=(args.height, args.width,3))
 		# RL variables
 		self.num_steps = 0
 		self.total_reward = 0
 		self.prev_measurement = None
 		self.episode_id = None
-		self.start_pos = None
+		#self.start_pos = None
 		self.last_obs = None
 		self.last_collision_frame = 0
+		self.distance = 0.0
 
 	def start_server(self):
 		'''
@@ -175,6 +177,7 @@ class CarlaEnv(gym.Env):
 	
 	def reset_env(self):
 		# Reset all variables here
+		self.distance = 0.0
 		self.num_steps = 0
 		self.total_reward = 0
 		self.prev_measurement = None
@@ -189,18 +192,17 @@ class CarlaEnv(gym.Env):
 			"reverse": False,
 			"hand_brake": False,
 		}
-		self.start_pos = [self.prev_measurement['x'],self.prev_measurement['y']]
+		#self.start_pos = [self.prev_measurement['x'],self.prev_measurement['y']]
+		
 		if (obs != None):
 			return self.preprocess_img(obs)
 		return []
 
 	def get_measurements(self):
 		loc, vel, wp, off_track = self.world.get_vehicle_data()
-		if (self.start_pos):
+		if (self.prev_measurement):
 			# if backward distance should be negative, remove norm (absolute)
-			dist_from_start = float(np.linalg.norm([loc.x - self.start_pos[0], loc.y - self.start_pos[1]]) / 100)
-		else:
-			dist_from_start = 0
+			self.distance += float(np.linalg.norm([loc.x - self.prev_measurement['x'], loc.y - self.prev_measurement['y']]))
 
 		frame, intensity = self.world.get_collision_reading() # Could be split into individual impulses based on the types of actors
 
@@ -221,7 +223,7 @@ class CarlaEnv(gym.Env):
 			"x": loc.x,
 			"y": loc.y,
 			"speed": vel,
-			"dist": dist_from_start,
+			"dist": self.distance,
 			"max_steps": self.config["max_steps"],
 			"collision": curr_collision,
 			"off_track": off_track
@@ -240,6 +242,10 @@ class CarlaEnv(gym.Env):
 		return array
 
 	def step(self,action):
+		# rescale since ddpg returns -ve throttle values which are useless to our environment
+		print('\nBEFORE',action)
+		action = self.controller.rescale(action)
+		print('SCALED',action)
 		if self.controller.parse_events(self.client, self.world, self.clock):
 			return
 		self.world.tick(self.clock)
@@ -311,69 +317,29 @@ class CarlaEnv(gym.Env):
 	def calculate_reward(self,curr_measurement):
 		
 		reward = 0.0
-		
+
+		reward += np.clip(curr_measurement["dist"] - self.prev_measurement["dist"], -10.0, 10.0)
 		# if +ve distance has been covered relative to the start point
-		if (self.prev_measurement["dist"] < curr_measurement["dist"]):
-			reward += 0.02 * curr_measurement["dist"]
-		# +ve reward for good speed
-		reward += 0.0005 * curr_measurement["speed"]
+
+		#if (curr_measurement["speed"] <= 1): #if car vel is idle/less than 5 km/hr
+		#	reward -= 0.0125 * (1 / (curr_measurement["speed"] + 1))
 
 		# -ve reward for continuous deceleration/idle positioning
-		#prev_throttle = self.prev_measurement["control"]["throttle"]
-		curr_brake = curr_measurement["control"]["brake"]
-		if (curr_brake > 0.0):
-			reward -= 0.02 * curr_brake
-		else:
-			reward += 0.05 * curr_measurement["control"]["throttle"]
+		# curr_brake = curr_measurement["control"]["brake"]
+		# if (curr_brake > 0.0):
+		# 	reward -= 0.25 * curr_brake
 
 		# Collision damage
-		reward -= .00002 * (curr_measurement["collision"] - self.prev_measurement["collision"])
+		# reward -= .00002 * (curr_measurement["collision"] - self.prev_measurement["collision"])
 
 		# Offlane/onlane penalty/awards
 
 		if (curr_measurement["off_track"]):
-			reward -= 0.025
-
-		# if (curr_measurement["off_track"] and not self.prev_measurement["off_track"]): # car got off track
-		# 	reward -= 0.025 
-		# elif (curr_measurement["off_track"] and self.prev_measurement["off_track"]): # car has been off track
-		# 	reward -= 0.05
-		# elif (not curr_measurement["off_track"] and self.prev_measurement["off_track"]): # car back to track
-		# 	reward += 0.1
-		# else: # car has been on track
-		# 	reward += 0
-
+			# since a -200 rewards means episode termination, we simply give a big -ve reward
+			reward -= reward + 200
+			#reward -= reward+1
 		return reward
 
-		# # Distance travelled from the start point in m
-		# cur_dist = curr_measurement["dist"]
-		# prev_dist = self.prev_measurement["dist"]
-		
-		# reward += np.clip(prev_dist - cur_dist, -10.0, 10.0)
-		# print('\n',temp)
-		# # Change in speed (km/hr)
-		# reward += 0.05 * (curr_measurement["speed"] - self.prev_measurement["speed"])
-
-		# # Collision damage
-		# reward -= .00002 * (curr_measurement["collision"] - self.prev_measurement["collision"])
-
-		# # Offlane/onlane penalty/awards
-
-		# if (curr_measurement["off_track"] and not self.prev_measurement["off_track"]): # car got off track
-		# 	reward -= 0.025 
-		# elif (curr_measurement["off_track"] and self.prev_measurement["off_track"]): # car has been off track
-		# 	reward -= 0.05
-		# elif (not curr_measurement["off_track"] and self.prev_measurement["off_track"]): # car back to track
-		# 	reward += 0.1
-		# else: # car has been on track
-		# 	reward += 0.0001
-
-		# The following two need to be updated in the API - LaneInvasionSensor should be used.
-
-		# Offroad intersection %
-
-		# Opposite Lane intersection %
-		#return reward
 
 	def check_collision(self,measurement):
 		return bool(measurement["collision"] > 0 or measurement["total_reward"] < -200)
@@ -465,7 +431,7 @@ def rl_loop(args):
 		total_reward = 0.0
 		while not done:
 			t += 1
-			obs, reward, done, info = env.step([-0.79674, 0.9927075])  # Full throttle, zero steering angle
+			obs, reward, done, info = env.step([0, 0])  # Full throttle, zero steering angle
 			total_reward += reward
 			if (t % 100 == 0):
 				print("step#:", t, "reward:", round(reward, 4), "total_reward:", round(total_reward, 4), "done:", done)

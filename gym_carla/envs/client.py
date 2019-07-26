@@ -148,6 +148,7 @@ class World(object):
 		self.world.on_tick(hud.on_world_tick)
 		self.recording_enabled = False
 		self.recording_start = 0
+		self.distance = 0.0
 
 	def restart(self):
 		# Keep same camera config if the camera manager exists.
@@ -355,10 +356,21 @@ class KeyboardControl(object):
 				self._parse_walker_keys(pygame.key.get_pressed(), clock.get_time())
 			world.player.apply_control(self._control)
 
-	def apply_autonomous_control(self, world, throttle=0.0, steer=0.0, brake=0.0, hand_brake=True, reverse=True, manual_gear_shift=False, gear=0):
+	def apply_autonomous_control(self, world, throttle=0.0, steer=0.0, brake=0.0, hand_brake=True, reverse=True, manual_gear_shift=False, gear=0, ang_constraint=10):
+		# Adds steer constraint such that car doesn't shift to extremeties and only 
+		# changes within a specific angular bound
 		if (self._autonomous_enabled):
+			p_steer_ang = math.degrees(math.asin(world.player.get_control().steer))
+			c_steer_ang = math.degrees(math.asin(steer))
+			clipped_steer_ang = np.clip(c_steer_ang, p_steer_ang-ang_constraint, p_steer_ang+ang_constraint)
+			steer = math.sin(math.radians(clipped_steer_ang))
 			world.player.apply_control(carla.VehicleControl(throttle=throttle, steer=steer, brake=brake, hand_brake=hand_brake, reverse=reverse,manual_gear_shift=manual_gear_shift,gear=gear))
 		return
+
+	def rescale(self,action,old_rng=(-1,1),new_rng=(0,1)):
+		action[0] = ((max(new_rng)- min(new_rng)) / (max(old_rng)- min(old_rng)) * (action[0] - min(old_rng)) + min(new_rng))
+		return action
+
 
 	def _parse_vehicle_keys(self, keys, milliseconds):
 		self._control.throttle = 1.0 if keys[K_UP] or keys[K_w] else 0.0
