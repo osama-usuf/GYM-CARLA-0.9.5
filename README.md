@@ -29,9 +29,6 @@ Add the following lines to `~/.bashrc`:
 
 ```
 export UE4_ROOT=~/UnrealEngine_4.22
-PYTHONPATH="<path to repository>/gym-carla/gym_carla/dist/carla-0.9.5-py3.5-linux-x86_64.egg":$PYTHONPATH
-PYTHONPATH="<path to repository>/gym-carla/gym_carla/envs":$PYTHONPATH
-export PYTHONPATH
 ```
 
 ## Usage
